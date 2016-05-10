@@ -48,27 +48,60 @@ class UI:
         return y + 1
 
     def load_client_point(self, f, row):
-        return self._load_point(self.client, f, row)
+        row = self._load_point(self.client, f, row)
+        self.client_refresh_ttl = StringVar(self.root)
+        row = row + 1
+        b = Button(self.root, text="取消选择")
+        b.grid(row=row, column=0)
+        b = Button(self.root, text="全选")
+        b.grid(row=row, column=1)
+        b = Button(self.root, text="添加刷新")
+        b.grid(row=row, column=2)
+        return row
 
     def load_server_point(self, f, row):
-        return self._load_point(self.server, f, row)
+        row = self._load_point(self.server, f, row)
+        self.server_refresh_ttl = StringVar(self.root)
+        row = row + 1
+        b = Button(self.root, text="取消选择")
+        b.grid(row=row, column=0)
+        b = Button(self.root, text="全选")
+        b.grid(row=row, column=1)
+        b = Button(self.root, text="添加刷新")
+        b.grid(row=row, column=2)
+        return row
 
     def run_main(self):
-        l = Label(self.root, text=u"服务器地址").grid(row=0, column=0)
+        self.server_host = StringVar(self.root)
         self.server_addr = StringVar(self.root)
-        self.server_addr.set("127.0.0.1:9999")
-        l = Entry(self.root, textvariable=self.server_addr, width=30)
+        self.client_addr = StringVar(self.root)
+        self.server_host.set("127.0.0.1:9999")
+
+        l = Label(self.root, text=u"服务器地址").grid(row=0, column=0)
+        l = Entry(self.root, textvariable=self.server_host, width=30)
         l.grid(row=0, column=1, columnspan=2, sticky="w")
+
         b = Button(self.root, text="连接服务器")
         b.grid(row=0, column=3, sticky='e')
+
         l = Label(self.root, text=u"+++++++++++++"*10).grid(row=1, column=0, columnspan=10, sticky="w")
-        Label(self.root, text=u"从站数据点:").grid(row=2, column=0, columnspan=5, sticky="w")
+        Label(self.root, text=u"从站数据点:").grid(row=2, column=0, sticky="w")
+        l = Label(self.root, text=u"从站地址:").grid(row=2, column=1)
+        l = Entry(self.root, textvariable=self.client_addr, width=5)
+        l.grid(row=2, column=2, sticky="w")
         row = self.load_client_point("client.csv", 3)
+
         row = row + 1
         l = Label(self.root, text=u"+++++++++++++"*10).grid(row=row, column=0, columnspan=10, sticky="w")
+
         row = row + 1
-        Label(self.root, text=u"主站数据点:").grid(row=row, column=0, columnspan=5, sticky="w")
-        row = self.load_client_point("client.csv", row + 1)
+        Label(self.root, text=u"主站数据点:").grid(row=row, column=0, sticky="w")
+        l = Label(self.root, text=u"主站地址:").grid(row=row, column=1)
+        l = Entry(self.root, textvariable=self.client_addr, width=5)
+        l.grid(row=row, column=2, sticky="w")
+
+        row = self.load_server_point("client.csv", row)
+
         self.root.mainloop()
 
 ui = UI()
