@@ -45,12 +45,13 @@ class UI:
                 x = x + 1
                 y = 0
             p.append(pt)
+        return y + 1
 
     def load_client_point(self, f, row):
-        self._load_point(self.client, f, row)
+        return self._load_point(self.client, f, row)
 
     def load_server_point(self, f, row):
-        self._load_point(self.server, f, row)
+        return self._load_point(self.server, f, row)
 
     def run_main(self):
         l = Label(self.root, text=u"服务器地址").grid(row=0, column=0)
@@ -60,8 +61,14 @@ class UI:
         l.grid(row=0, column=1, columnspan=2, sticky="w")
         b = Button(self.root, text="连接服务器")
         b.grid(row=0, column=3, sticky='e')
-        self.load_client_point("client.csv", 1)
-        #self.load_server_point('server.csv', 1)
+        l = Label(self.root, text=u"+++++++++++++"*10).grid(row=1, column=0, columnspan=10, sticky="w")
+        Label(self.root, text=u"从站数据点:").grid(row=2, column=0, columnspan=5, sticky="w")
+        row = self.load_client_point("client.csv", 3)
+        row = row + 1
+        l = Label(self.root, text=u"+++++++++++++"*10).grid(row=row, column=0, columnspan=10, sticky="w")
+        row = row + 1
+        Label(self.root, text=u"主站数据点:").grid(row=row, column=0, columnspan=5, sticky="w")
+        row = self.load_client_point("client.csv", row + 1)
         self.root.mainloop()
 
 ui = UI()
