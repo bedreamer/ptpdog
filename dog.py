@@ -14,6 +14,7 @@ class point:
         self.name = name
         self.x = x
         self.y = y
+        self.bytes = []
         self.kind = kind
         self.checked = False
         self.unit = unit
@@ -47,6 +48,26 @@ class point:
 
     def get_v(self):
         return self.s.get().split(' ')[0]
+
+    def get_bytes(self):
+        if  self.kind == 'INT':
+            return int(self.s.get().split(' ')[0])
+        elif self.kind == 'F1' or self.kind == 'F2':
+            v = struct.pack("f", float(self.s.get().split(' ')[0]))
+            v = struct.unpack('i', v)[0]
+            return v
+        else:
+            return int(self.bytes[0])
+
+    def set_bytes(self, b):
+        if  self.kind == 'INT':
+            pass
+        elif self.kind == 'F1':
+            pass
+        elif self.kind == 'F2':
+            pass
+        else:
+            return self.bytes[0]
 
 def cptp_server_main(root, port):
     pass
@@ -114,6 +135,12 @@ class UI:
         b = Button(self.root, text="从站功能：写入", command=self.write_server, bg="#DD0")
         b.grid(row=row, column=4)
         return row + 1
+
+    def search_point(self, source, id):
+        for p in source:
+            if int(p.id) == id:
+                return p
+        return None
 
     def get_checked(self, pts):
         s = []
@@ -220,9 +247,23 @@ class UI:
     def start_server(self):
         print u"启动服务器"
 
-    def about_request(self, source, frame, des, src, func, count, len):
+    def about_request(self, source, peer, frame, des, src, func, count, len):
         if func == cptp_head.FUNC_RD:
-            print "读"
+            ack = []
+            ids = []
+            p = cptp()
+            for i in range(count):
+                id = frame[ cptp_head.HEAD_SIZE + i * 2 + 0] + frame[ cptp_head.HEAD_SIZE + i * 2 + 1] * 256
+                ids.append(id)
+            p.patch_request_header(ack, des, src, cptp_head.FUNC_REFRESH, 1, cptp_head.WITHOUT_TSP)
+            for pt in ids:
+                thiz = self.search_point(source, pt)
+                if thiz is None:
+                    continue
+                p.patch_point(ack, pt, thiz.get_bytes())
+            p.patch_tail(ack)
+            print ack
+
         elif func == cptp_head.FUNC_WR:
             print "写"
         elif func == cptp_head.FUNC_REFRESH:
@@ -230,38 +271,28 @@ class UI:
         else:
             print u"不支持功能码%d" % func
 
-    def about_ack_server(self, frame, des, src, func, count, len):
+    def about_ack(self, source, peer, frame, des, src, func, count, len):
         if func == cptp_head.FUNC_RD:
-            print "读"
+            print "读数据应答"
         elif func == cptp_head.FUNC_WR:
-            print "写"
+            print "写数据应答"
         elif func == cptp_head.FUNC_REFRESH:
-            print "刷新"
+            print "刷新数据应答"
         else:
             print u"不支持功能码%d" % func
-
-    def about_ack_client(self, frame, des, src, func, count, len):
-        pass
 
     def about_recv_frame(self, frame):
         p = cptp_head(frame)
         if p.des == int(self.server_addr.get()) and p.kind == cptp_head.TYPE_ACK:
-            return self.about_ack_server(frame, p.des, p.src, p.func, p.count, p.len)
+            return self.about_ack(self.server, self.client, frame, p.des, p.src, p.func, p.count, p.len)
         if p.des == int(self.server_addr.get()) and p.kind == cptp_head.TYPE_REQUEST:
-            return self.about_request(self.server, frame, p.des, p.src, p.func, p.count, p.len)
+            return self.about_request(self.server, self.client, frame, p.des, p.src, p.func, p.count, p.len)
         elif p.des == int(self.client_addr.get()) and p.kind == cptp_head.TYPE_ACK:
-            return self.about_ack_client(frame, p.des, p.src, p.func, p.count, p.len)
+            return self.about_ack(self.client, self.server, frame, p.des, p.src, p.func, p.count, p.len)
         elif p.des == int(self.client_addr.get()) and p.kind == cptp_head.TYPE_REQUEST:
-            return self.about_request(self.client, frame, p.des, p.src, p.func, p.count, p.len)
+            return self.about_request(self.client, self.server, frame, p.des, p.src, p.func, p.count, p.len)
         else:
             print "非法地址%d->%d" % (p.src, p.des)
-        print p.len
-        print p.ver
-        print p.with_tsp
-        print p.kind
-        print p.func
-        print p.seq
-        print p.count
 
     def timer_proc(self):
         if self.client_socket:
