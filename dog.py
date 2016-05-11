@@ -245,7 +245,18 @@ class UI:
            self.client_socket.send(cbuf)
 
     def start_server(self):
-        print u"启动服务器"
+        h = self.server_port.get()
+        if self.client_socket:
+            return
+        self.root.title("CPTP解码狗 V3.45.298 主站模式*")
+        self.server_socket = socket()
+        self.server_socket.bind(('0.0.0.0', int(h)))
+        self.server_socket.listen(1)
+        if self.server_socket > 0:
+            self.timer_proc()
+
+    def update_source(self, source, n):
+        pass
 
     def about_request(self, source, peer, frame, des, src, func, count, len):
         if func == cptp_head.FUNC_RD:
@@ -255,17 +266,30 @@ class UI:
             for i in range(count):
                 id = frame[ cptp_head.HEAD_SIZE + i * 2 + 0] + frame[ cptp_head.HEAD_SIZE + i * 2 + 1] * 256
                 ids.append(id)
-            p.patch_request_header(ack, des, src, cptp_head.FUNC_REFRESH, 1, cptp_head.WITHOUT_TSP)
+            p.patch_ack_header(ack, des, src, cptp_head.FUNC_RD, 1, 0, cptp_head.WITHOUT_TSP)
             for pt in ids:
                 thiz = self.search_point(source, pt)
                 if thiz is None:
                     continue
                 p.patch_point(ack, pt, thiz.get_bytes())
             p.patch_tail(ack)
-            print ack
+            self.cptp.send(ack)
 
         elif func == cptp_head.FUNC_WR:
             print "写"
+            ack = []
+            pts = []
+            p = cptp()
+            for i in range(count):
+                id = frame[ cptp_head.HEAD_SIZE + i * 2 + 0] + frame[ cptp_head.HEAD_SIZE + i * 2 + 1] * 256
+                v = frame[ cptp_head.HEAD_SIZE + i * 2 + 2] + frame[ cptp_head.HEAD_SIZE + i * 2 + 3] * 256 +\
+                    frame[ cptp_head.HEAD_SIZE + i * 2 + 4] * 512 + frame[ cptp_head.HEAD_SIZE + i * 2 + 5] * 1024
+                pts.append({'id':id, 'v':v})
+            self.update_source(self.source, pts)
+            p.patch_ack_header(ack, des, src, cptp_head.FUNC_WR, 1, 0, cptp_head.WITHOUT_TSP)
+            p.patch_tail(ack)
+            self.cptp.send(ack)
+
         elif func == cptp_head.FUNC_REFRESH:
             print "刷新"
         else:
@@ -296,7 +320,7 @@ class UI:
 
     def timer_proc(self):
         if self.client_socket:
-            r, w, e = select.select([self.client_socket], [self.client_socket], [self.client_socket], None)
+            r, w, e = select.select([self.client_socket], [self.client_socket], [self.client_socket], 0.1)
             if self.client_socket in r:
                 buf = self.client_socket.recv(1024)
                 if buf is None or len(buf) == 0:
@@ -305,12 +329,26 @@ class UI:
                     self.client_socket = None
                     return
                 else:
-                    print buf
                     self.cptp.push_bytes(buf)
                     while len(self.cptp.rx_frame):
                         self.about_recv_frame(self.cptp.rx_frame.pop(0))
+            if self.client_socket in w:
+                if len(self.cptp.tx_frame):
+                    f = self.cptp.tx_frame.pop(0)
+                    cf = compress(f)
+                    l = self.client_socket.send(cf)
+                    if l <= 0:
+                        print "socket closed!"
+                        self.client_socket.close()
+                        self.client_socket = None
+                        return
+
             if self.client_socket in e:
                 print "error"
+        elif self.server_socket:
+            r, w, e = select.select([self.server_socket], [], [], 0.1)
+            if self.server_socket in r:
+                self.client_socket, addr = self.server_socket.accept()
         self.timer = Timer(0.2, self.timer_proc)
         self.timer.start()
 
@@ -319,6 +357,7 @@ class UI:
         h = h.split(':')
         if self.client_socket:
             return
+        self.root.title("CPTP解码狗 V3.45.298 从站模式#")
         self.client_socket = socket()
         self.client_socket.connect((h[0], int(h[1])))
         if self.client_socket > 0:
@@ -334,6 +373,7 @@ class UI:
         self.server_addr.set(1)
         self.client_addr.set(128)
         self.client_socket = None
+        self.server_socket = None
         self.root.title("CPTP解码狗 V3.45.298")
         #self.log.title("CPTP数据流")
 
