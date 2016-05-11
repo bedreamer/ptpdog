@@ -60,6 +60,7 @@ class UI:
         #self.log = Tk()
         self.client = []
         self.server = []
+        self.cptp = cptp()
 
     def _load_point(self, p, f, row):
         fd = open(f, "r")
@@ -205,13 +206,62 @@ class UI:
             self.client_socket.send(cbuf)
 
     def read_server(self):
-        self.read(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
+        buf = self.read(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
+        if len(buf):
+           cbuf = compress(buf)
+           self.client_socket.send(cbuf)
 
     def write_server(self):
-        self.write(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
+        buf = self.write(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
+        if len(buf):
+           cbuf = compress(buf)
+           self.client_socket.send(cbuf)
 
     def start_server(self):
         print u"启动服务器"
+
+    def about_request(self, source, frame, des, src, func, count, len):
+        if func == cptp_head.FUNC_RD:
+            print "读"
+        elif func == cptp_head.FUNC_WR:
+            print "写"
+        elif func == cptp_head.FUNC_REFRESH:
+            print "刷新"
+        else:
+            print u"不支持功能码%d" % func
+
+    def about_ack_server(self, frame, des, src, func, count, len):
+        if func == cptp_head.FUNC_RD:
+            print "读"
+        elif func == cptp_head.FUNC_WR:
+            print "写"
+        elif func == cptp_head.FUNC_REFRESH:
+            print "刷新"
+        else:
+            print u"不支持功能码%d" % func
+
+    def about_ack_client(self, frame, des, src, func, count, len):
+        pass
+
+    def about_recv_frame(self, frame):
+        p = cptp_head(frame)
+        if p.des == int(self.server_addr.get()) and p.kind == cptp_head.TYPE_ACK:
+            return self.about_ack_server(frame, p.des, p.src, p.func, p.count, p.len)
+        if p.des == int(self.server_addr.get()) and p.kind == cptp_head.TYPE_REQUEST:
+            return self.about_request(self.server, frame, p.des, p.src, p.func, p.count, p.len)
+        elif p.des == int(self.client_addr.get()) and p.kind == cptp_head.TYPE_ACK:
+            return self.about_ack_client(frame, p.des, p.src, p.func, p.count, p.len)
+        elif p.des == int(self.client_addr.get()) and p.kind == cptp_head.TYPE_REQUEST:
+            return self.about_request(self.client, frame, p.des, p.src, p.func, p.count, p.len)
+        else:
+            print "非法地址%d->%d" % (p.src, p.des)
+        print p.len
+        print p.ver
+        print p.with_tsp
+        print p.kind
+        print p.func
+        print p.seq
+        print p.count
 
     def timer_proc(self):
         if self.client_socket:
@@ -225,6 +275,9 @@ class UI:
                     return
                 else:
                     print buf
+                    self.cptp.push_bytes(buf)
+                    while len(self.cptp.rx_frame):
+                        self.about_recv_frame(self.cptp.rx_frame.pop(0))
             if self.client_socket in e:
                 print "error"
         self.timer = Timer(0.2, self.timer_proc)
