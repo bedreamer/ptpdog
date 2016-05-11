@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 __author__ = 'lijie'
 from Tkinter import *
-import  threading
+from cptp import *
 
 class point:
     def __init__(self, root, id, v, name, x, y, unit):
@@ -13,11 +13,22 @@ class point:
         self.checked = False
         self.unit = unit
         self.s = StringVar(root)
+        self.cv = StringVar(root)
         self.s.set(v + ' ' + unit)
-        self.c = Checkbutton(root, text=name, command=self.check_call_back)
+        self.c = Checkbutton(root, text=name, variable =self.cv, onvalue=1, offvalue=0, command=self.check_call_back)
         self.e = Entry(root, width="8", textvariable=self.s)
         self.c.grid(row=x, column=y, sticky="w")
         self.e.grid(row=x, column=y+1)
+        self.uncheck()
+
+    def check(self):
+        self.cv.set(1)
+        self.checked = True
+
+    def uncheck(self):
+        self.cv.set(0)
+        self.checked = False
+
     def check_call_back(self):
         if self.checked:
             print "uncheck", self.id, self.s.get()
@@ -30,7 +41,7 @@ class point:
         self.s.set(v)
 
     def get_v(self):
-        return self.s.get()
+        return self.s.get().split(' ')[0]
 
 class UI:
     def __init__(self):
@@ -92,35 +103,89 @@ class UI:
         b.grid(row=row, column=4)
         return row + 1
 
+    def get_checked(self, pts):
+        s = []
+        for p in pts:
+            if p.checked:
+                s.append({'id':p.id, 'v':p.get_v()})
+        return s
+
+    def check_all(self, pts):
+        for p in pts:
+            p.check()
+
+    def uncheck_all(self, pts):
+        for p in pts:
+            p.uncheck()
+
     def check_all_client(self):
-        print "check_all_client"
+        self.check_all(self.client)
 
     def uncheck_all_client(self):
-        print "uncheck_all_client"
+        self.uncheck_all(self.client)
+
+    def read(self, pts, src, des):
+        p = cptp()
+        buf = []
+        checked = self.get_checked(pts)
+        if len(checked) == 0:
+            return
+        p.patch_request_header(buf, src, des, cptp_head.FUNC_RD, 1, cptp_head.WITHOUT_TSP)
+        for pt in checked:
+            p.patch_id(buf, int(pt['id']))
+        p.patch_tail(buf)
+        p.dump(buf)
+        return buf
+
+    def write(self, pts, src, des):
+        p = cptp()
+        buf = []
+        checked = self.get_checked(pts)
+        if len(checked) == 0:
+            return
+        p.patch_request_header(buf, src, des, cptp_head.FUNC_WR, 1, cptp_head.WITHOUT_TSP)
+        for pt in checked:
+            p.patch_point(buf, int(pt['id']), int(pt['v']))
+        p.patch_tail(buf)
+        p.dump(buf)
+        return buf
+
+    def refresh(self, pts, src, des):
+        p = cptp()
+        buf = []
+        checked = self.get_checked(pts)
+        if len(checked) == 0:
+            return
+        p.patch_request_header(buf, src, des, cptp_head.FUNC_REFRESH, 1, cptp_head.WITHOUT_TSP)
+        for pt in checked:
+            p.patch_point(buf, int(pt['id']), int(pt['v']))
+        p.patch_tail(buf)
+        p.dump(buf)
+        return buf
 
     def refresh_client(self):
-        print "refresh_client"
+        self.refresh(self.client, int(self.server_addr.get()), int(self.client_addr.get()))
 
     def read_client(self):
-        print "read_client"
+       self.read(self.client, int(self.client_addr.get()), int(self.server_addr.get()))
 
     def write_client(self):
-        print "write_client"
+        self.write(self.client, int(self.client_addr.get()), int(self.server_addr.get()))
 
     def check_all_server(self):
-        print "check_all_server"
+        self.check_all(self.server)
 
     def uncheck_all_server(self):
-        print "uncheck_all_server"
+        self.uncheck_all(self.server)
 
     def refresh_server(self):
-        print "refresh_server"
+        self.refresh(self.server, int(self.client_addr.get()), int(self.server_addr.get()))
 
     def read_server(self):
-        print "read_server"
+        self.read(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
 
     def write_server(self):
-        print "write_server"
+        self.write(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
 
     def start_server(self):
         print u"启动服务器"
