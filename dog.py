@@ -320,6 +320,18 @@ class UI:
     def about_ack(self, source, peer, frame, des, src, func, count, len):
         if func == cptp_head.FUNC_RD:
             print "读数据应答"
+            ack = []
+            pts = []
+            p = cptp()
+            for i in range(count):
+                id = frame[ cptp_head.HEAD_SIZE + 1 + i * 6 + 0] + frame[ cptp_head.HEAD_SIZE + 1 + i * 6 + 1] * 256
+                b1 = int(frame[ cptp_head.HEAD_SIZE + 1 + i * 6 + 2])
+                b2 = int(frame[ cptp_head.HEAD_SIZE + 1 + i * 6 + 3]) << 8
+                b3 = int(frame[ cptp_head.HEAD_SIZE + 1 + i * 6 + 4]) << 16
+                b4 = int(frame[ cptp_head.HEAD_SIZE + 1 + i * 6 + 5]) << 24
+                v = b1 + b2 + b3 + b4
+                pts.append({'id':id, 'v':v})
+            self.update_source(source, pts)
         elif func == cptp_head.FUNC_WR:
             print "写数据应答"
         elif func == cptp_head.FUNC_REFRESH:
