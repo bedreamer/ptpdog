@@ -26,12 +26,41 @@ class cptp:
     def __init__(self):
         self.rx = []
         self.tx = []
+        self.rx_frame = []
+        self.tx_frame = []
 
-    def push_bytes(self, b):
-        pass
+    def push_bytes(self, by):
+        for b in by:
+            self.rx.append(ord(b))
+        while True:
+            if len(self.rx) <= 9:
+                return []
 
-    def pull_bytes(self):
-        pass
+            if self.rx[0] != 0x68:
+                self.rx = []
+                return []
+
+            need_bytes = self.rx[5] + 9 + 2
+            if len(self.rx) < need_bytes:
+                return []
+
+            if self.rx[ need_bytes - 1] != 0x16:
+                self.rx = self.rx[need_bytes:]
+                continue
+
+            sum = 0
+            for x in range(need_bytes-2):
+                sum = sum + self.rx[x]
+            sum = sum & 0xFF
+            if sum != self.rx[ need_bytes - 2]:
+                self.rx = self.rx[need_bytes:]
+                continue
+            self.rx_frame.append(self.rx[:need_bytes])
+            self.rx = self.rx[need_bytes:]
+        return []
+
+    def send(self, f):
+        self.tx_frame.append(f)
 
     def _patch_head(self, buf, src, des, _type, func, seq, need_tsp):
         buf.append(0x68)
@@ -63,7 +92,7 @@ class cptp:
     def patch_ack_header(self, buf, src, des, func, seq, errorno, need_tsp):
         self._patch_head(buf, src, des, cptp_head.TYPE_ACK, func, seq, need_tsp)
         buf.append(errorno)
-        buf.append(1)
+        buf[5] = 1
 
     def patch_id(self, buf, id):
         h = cptp_head(buf)
@@ -100,14 +129,14 @@ class cptp:
         buf.append(sum & 0xFF)
         buf.append(0x16)
 
-    def dump(self, buf):
-        print '%d [ ' % len(buf),
+    def tohex(self, buf):
+        s = []
         for b in buf:
-            print "%02X " % b,
-        print ']'
+            s.append('%02X' % b)
+        return s
 
-    def send(self, buf):
-        pass
+    def dump(self, buf):
+        print self.tohex(buf)
 
 '''
 if __name__ == "__main__":
