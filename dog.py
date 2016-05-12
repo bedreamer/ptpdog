@@ -2,7 +2,7 @@
 __author__ = 'lijie'
 from Tkinter import *
 from cptp import *
-from threading import Timer
+from threading import *
 import  select
 from socket import *
 import struct
@@ -47,7 +47,7 @@ class point:
         self.s.set(v)
 
     def get_v(self):
-        return self.s.get().split(' ')[0]
+        return self.get_bytes()
 
     def get_bytes(self):
         if  self.kind == 'INT':
@@ -59,13 +59,13 @@ class point:
         else:
             return int(self.bytes[0])
 
-    def set_bytes(self, b):
+    def set_bytes(self, vb):
         if  self.kind == 'INT':
-            pass
-        elif self.kind == 'F1':
-            pass
-        elif self.kind == 'F2':
-            pass
+            self.s.set(repr(vb) + ' ' + self.unit)
+        elif self.kind == 'F1' or self.kind == 'F2':
+            f = struct.pack('<i',vb)
+            f = struct.unpack('f', f)[0]
+            self.s.set(repr(round(f, 2)) + ' ' + self.unit)
         else:
             return self.bytes[0]
 
@@ -78,7 +78,6 @@ def compress(l):
 class UI:
     def __init__(self):
         self.root = Tk()
-        #self.log = Tk()
         self.client = []
         self.server = []
         self.cptp = cptp()
@@ -206,19 +205,19 @@ class UI:
         buf = self.refresh(self.client, int(self.server_addr.get()), int(self.client_addr.get()))
         if len(buf):
             cbuf = compress(buf)
-            self.client_socket.send(cbuf)
+            self.cptp.send(cbuf)
 
     def read_client(self):
        buf = self.read(self.client, int(self.client_addr.get()), int(self.server_addr.get()))
        if len(buf):
            cbuf = compress(buf)
-           self.client_socket.send(cbuf)
+           self.cptp.send(cbuf)
 
     def write_client(self):
         buf = self.write(self.client, int(self.client_addr.get()), int(self.server_addr.get()))
         if len(buf):
             cbuf = compress(buf)
-            self.client_socket.send(cbuf)
+            self.cptp.send(cbuf)
 
     def check_all_server(self):
         self.check_all(self.server)
@@ -230,19 +229,19 @@ class UI:
         buf = self.refresh(self.server, int(self.client_addr.get()), int(self.server_addr.get()))
         if len(buf):
             cbuf = compress(buf)
-            self.client_socket.send(cbuf)
+            self.cptp.send(cbuf)
 
     def read_server(self):
         buf = self.read(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
         if len(buf):
            cbuf = compress(buf)
-           self.client_socket.send(cbuf)
+           self.cptp.send(cbuf)
 
     def write_server(self):
         buf = self.write(self.server, int(self.server_addr.get()), int(self.client_addr.get()))
         if len(buf):
            cbuf = compress(buf)
-           self.client_socket.send(cbuf)
+           self.cptp.send(cbuf)
 
     def start_server(self):
         h = self.server_port.get()
@@ -254,9 +253,15 @@ class UI:
         self.server_socket.listen(1)
         if self.server_socket > 0:
             self.timer_proc()
+            self.start_b['bg'] = '#777'
+            self.start_b['text'] = '关闭服务'
 
-    def update_source(self, source, n):
-        pass
+    def update_source(self, source, points):
+        for p in points:
+            this_point = self.search_point(source, p['id']);
+            if this_point is None:
+                continue
+            this_point.set_bytes(p['v'])
 
     def about_request(self, source, peer, frame, des, src, func, count, len):
         if func == cptp_head.FUNC_RD:
@@ -273,10 +278,29 @@ class UI:
                     continue
                 p.patch_point(ack, pt, thiz.get_bytes())
             p.patch_tail(ack)
+            ack = compress(ack)
             self.cptp.send(ack)
-
         elif func == cptp_head.FUNC_WR:
             print "写"
+            ack = []
+            pts = []
+            p = cptp()
+            for i in range(count):
+                id = frame[ cptp_head.HEAD_SIZE + i * 6 + 0] + frame[ cptp_head.HEAD_SIZE + i * 6 + 1] * 256
+                b1 = int(frame[ cptp_head.HEAD_SIZE + i * 6 + 2])
+                b2 = int(frame[ cptp_head.HEAD_SIZE + i * 6 + 3]) << 8
+                b3 = int(frame[ cptp_head.HEAD_SIZE + i * 6 + 4]) << 16
+                b4 = int(frame[ cptp_head.HEAD_SIZE + i * 6 + 5]) << 24
+                v = b1 + b2 + b3 + b4
+                pts.append({'id':id, 'v':v})
+            self.update_source(source, pts)
+            p.patch_ack_header(ack, des, src, cptp_head.FUNC_WR, 1, 0, cptp_head.WITHOUT_TSP)
+            p.patch_tail(ack)
+            ack = compress(ack)
+            self.cptp.send(ack)
+
+        elif func == cptp_head.FUNC_REFRESH:
+            print "刷新"
             ack = []
             pts = []
             p = cptp()
@@ -285,13 +309,11 @@ class UI:
                 v = frame[ cptp_head.HEAD_SIZE + i * 2 + 2] + frame[ cptp_head.HEAD_SIZE + i * 2 + 3] * 256 +\
                     frame[ cptp_head.HEAD_SIZE + i * 2 + 4] * 512 + frame[ cptp_head.HEAD_SIZE + i * 2 + 5] * 1024
                 pts.append({'id':id, 'v':v})
-            self.update_source(self.source, pts)
+            self.update_source(peer, pts)
             p.patch_ack_header(ack, des, src, cptp_head.FUNC_WR, 1, 0, cptp_head.WITHOUT_TSP)
             p.patch_tail(ack)
+            ack = compress(ack)
             self.cptp.send(ack)
-
-        elif func == cptp_head.FUNC_REFRESH:
-            print "刷新"
         else:
             print u"不支持功能码%d" % func
 
@@ -307,6 +329,7 @@ class UI:
 
     def about_recv_frame(self, frame):
         p = cptp_head(frame)
+        self.lb.insert(END, repr(self.cptp.tohex(frame)))
         if p.des == int(self.server_addr.get()) and p.kind == cptp_head.TYPE_ACK:
             return self.about_ack(self.server, self.client, frame, p.des, p.src, p.func, p.count, p.len)
         if p.des == int(self.server_addr.get()) and p.kind == cptp_head.TYPE_REQUEST:
@@ -329,14 +352,18 @@ class UI:
                     self.client_socket = None
                     return
                 else:
+                    self.lock.acquire()
                     self.cptp.push_bytes(buf)
                     while len(self.cptp.rx_frame):
                         self.about_recv_frame(self.cptp.rx_frame.pop(0))
+                    self.lock.release()
             if self.client_socket in w:
                 if len(self.cptp.tx_frame):
+                    self.lock.acquire()
                     f = self.cptp.tx_frame.pop(0)
-                    cf = compress(f)
-                    l = self.client_socket.send(cf)
+                    self.lock.release()
+                    #cf = compress(f)
+                    l = self.client_socket.send(f)
                     if l <= 0:
                         print "socket closed!"
                         self.client_socket.close()
@@ -362,6 +389,8 @@ class UI:
         self.client_socket.connect((h[0], int(h[1])))
         if self.client_socket > 0:
             self.timer_proc()
+            self.link_b['bg'] = '#777'
+            self.link_b['text'] = '断开连接'
 
     def run_main(self):
         self.server_host = StringVar(self.root)
@@ -375,14 +404,15 @@ class UI:
         self.client_socket = None
         self.server_socket = None
         self.root.title("CPTP解码狗 V3.45.298")
-        #self.log.title("CPTP数据流")
+        self.lb = Listbox(self.root, width=200)
+        self.lock = RLock()
 
         l = Label(self.root, text=u"服务器地址").grid(row=0, column=0)
         l = Entry(self.root, textvariable=self.server_host, width=30)
         l.grid(row=0, column=1, columnspan=2, sticky="w")
 
-        b = Button(self.root, text="连接服务器", command=self.link_server, bg="#FF0")
-        b.grid(row=0, column=3, sticky='e')
+        self.link_b = Button(self.root, text="连接服务器", command=self.link_server, bg="#FF0")
+        self.link_b.grid(row=0, column=3, sticky='e')
 
         l = Label(self.root, text=u"+++++++++++++"*10).grid(row=1, column=0, columnspan=10, sticky="w")
         Label(self.root, text=u"从站数据点:").grid(row=2, column=0, sticky="w")
@@ -397,16 +427,18 @@ class UI:
         l = Label(self.root, text=u"服务端口").grid(row=row, column=0)
         l = Entry(self.root, textvariable=self.server_port, width=8)
         l.grid(row=row, column=1, sticky="w")
-        b = Button(self.root, text="启动服务器", command=self.start_server, bg="#0FF")
-        b.grid(row=row, column=2, sticky='e')
+        self.start_b = Button(self.root, text="启动服务器", command=self.start_server, bg="#0FF")
+        self.start_b.grid(row=row, column=2, sticky='e')
 
         row = row + 1
         Label(self.root, text=u"主站数据点:").grid(row=row, column=0, sticky="w")
         l = Label(self.root, text=u"主站地址:").grid(row=row, column=1)
         l = Entry(self.root, textvariable=self.server_addr, width=5)
         l.grid(row=row, column=2, sticky="w")
-
-        row = self.load_server_point("server.csv", row + 1)
+        row = row + 1
+        row = self.load_server_point("server.csv", row)
+        row = row + 1
+        self.lb.grid(row=row, column=0, columnspan=10)
 
         self.root.mainloop()
 
