@@ -1,0 +1,17 @@
+id,name,v,unit,kind,method
+64,充电机编号,0,,P_INT,read
+65,区域编码,0,,P_INT,read
+66,最大可输出电压,0,V,P_FLOAT,read
+67,最小可输出电压,0,V,P_FLOAT,read
+68,最大可输出电流,0,A,P_FLOAT,read
+69,最小可输出电流,0,A,P_FLOAT,read
+70,充电机是否准备好,0,,P_INT,read/refresh
+71,充电允许,0,,P_INT,read/refresh
+72,当前输出电压,0,V,P_FLOAT,read/refresh
+73,当前输出电流,0,A,P_FLOAT,read/refresh
+74,累计充电时间,0,分,P_INT,read/refresh
+75,累计输出电量,0,度,P_FLOAT,read/refresh
+76,充电机终止充电原因,0,,P_INT,refresh
+77,充电机终止充电故障原因,0,,P_INT,refresh
+78,充电机终止充电错误原因,0,,P_INT,refresh
+79,绝缘检测是否通过,0,,P_INT,read
